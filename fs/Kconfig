@@ -15,6 +15,19 @@ config VALIDATE_FS_PARSER
 	  Enable this to perform validation of the parameter description for a
 	  filesystem when it is registered.
 
+choice
+	prompt "Default mount option (RELATIME/NOATIME)"
+	default DEFAULT_MNT_RELATIME
+	help
+	  Select default mount option.
+
+	config DEFAULT_MNT_RELATIME
+		bool "RELATIME"
+
+	config DEFAULT_MNT_NOATIME
+		bool "NOATIME"
+endchoice
+
 config FS_IOMAP
 	bool
 

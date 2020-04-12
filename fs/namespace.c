@@ -3317,10 +3317,14 @@ int path_mount(const char *dev_name, struct path *path,
 	if (flags & SB_MANDLOCK)
 		warn_mandlock();
 
+#ifdef CONFIG_DEFAULT_MNT_NOATIME
+	if (!(flags & MS_RELATIME))
+		mnt_flags |= MNT_NOATIME;
+#else
 	/* Default to relatime unless overriden */
 	if (!(flags & MS_NOATIME))
 		mnt_flags |= MNT_RELATIME;
-
+#endif
 	/* Separate the per-mountpoint flags */
 	if (flags & MS_NOSUID)
 		mnt_flags |= MNT_NOSUID;
