@@ -74,6 +74,11 @@ config ACPI_DEBUGGER
 	  This is still under development, currently enabling this only
 	  results in the compilation of the ACPICA debugger files.
 
+config ACPI_CALL
+	tristate "Raw ACPI call interface"
+	help
+	  Enable /proc/acpi/call interface for making raw ACPI calls.
+
 if ACPI_DEBUGGER
 
 config ACPI_DEBUGGER_USER

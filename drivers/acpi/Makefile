@@ -32,6 +32,8 @@ acpi-$(CONFIG_ACPI_SYSTEM_POWER_STATES_SUPPORT) += sleep.o
 acpi-y				+= device_sysfs.o device_pm.o
 acpi-$(CONFIG_ACPI_SLEEP)	+= proc.o
 
+obj-$(CONFIG_ACPI_CALL)		+= acpi_call.o
+
 
 #
 # ACPI Bus and Device Drivers
