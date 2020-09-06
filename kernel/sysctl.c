@@ -23,10 +23,6 @@
 #include <linux/uaccess.h>
 #include <asm/processor.h>
 
-#if IS_ENABLED(CONFIG_USB)
-#include <linux/usb.h>
-#endif
-
 /* shared constants to be used in various sysctls */
 const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
 EXPORT_SYMBOL(sysctl_vals);
@@ -1494,17 +1490,6 @@ int proc_do_static_key(const struct ctl_table *table, int write,
 }
 
 static const struct ctl_table sysctl_subsys_table[] = {
-#if IS_ENABLED(CONFIG_USB)
-	{
-		.procname	= "deny_new_usb",
-		.data		= &deny_new_usb,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax_sysadmin,
-		.extra1		= SYSCTL_ZERO,
-		.extra2		= SYSCTL_ONE,
-	},
-#endif
 #ifdef CONFIG_PROC_SYSCTL
 	{
 		.procname	= "sysctl_writes_strict",
