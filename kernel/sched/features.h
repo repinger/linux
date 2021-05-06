@@ -4,32 +4,32 @@
  * Using the avg_vruntime, do the right thing and preserve lag across
  * sleep+wake cycles. EEVDF placement strategy #1, #2 if disabled.
  */
-SCHED_FEAT(PLACE_LAG, true)
+#define SCHED_FEAT_PLACE_LAG 1
 /*
  * Give new tasks half a slice to ease into the competition.
  */
-SCHED_FEAT(PLACE_DEADLINE_INITIAL, true)
+#define SCHED_FEAT_PLACE_DEADLINE_INITIAL 1
 /*
  * Preserve relative virtual deadline on 'migration'.
  */
-SCHED_FEAT(PLACE_REL_DEADLINE, true)
+#define SCHED_FEAT_PLACE_REL_DEADLINE 1
 /*
  * Inhibit (wakeup) preemption until the current task has either matched the
  * 0-lag point or until is has exhausted it's slice.
  */
-SCHED_FEAT(RUN_TO_PARITY, true)
+#define SCHED_FEAT_RUN_TO_PARITY 1
 /*
  * Allow wakeup of tasks with a shorter slice to cancel RESPECT_SLICE for
  * current.
  */
-SCHED_FEAT(PREEMPT_SHORT, true)
+#define SCHED_FEAT_PREEMPT_SHORT 1
 
 /*
  * Prefer to schedule the task we woke last (assuming it failed
  * wakeup-preemption), since its likely going to consume data we
  * touched, increases cache locality.
  */
-SCHED_FEAT(NEXT_BUDDY, false)
+#define SCHED_FEAT_NEXT_BUDDY 0
 
 /*
  * Allow completely ignoring cfs_rq->next; which can be set from various
@@ -38,13 +38,13 @@ SCHED_FEAT(NEXT_BUDDY, false)
  *   - yield_to_task()
  *   - cgroup dequeue / pick
  */
-SCHED_FEAT(PICK_BUDDY, true)
+#define SCHED_FEAT_PICK_BUDDY 1
 
 /*
  * Consider buddies to be cache hot, decreases the likeliness of a
  * cache buddy being migrated away, increases cache locality.
  */
-SCHED_FEAT(CACHE_HOT_BUDDY, true)
+#define SCHED_FEAT_CACHE_HOT_BUDDY 1
 
 /*
  * Delay dequeueing tasks until they get selected or woken.
@@ -55,45 +55,45 @@ SCHED_FEAT(CACHE_HOT_BUDDY, true)
  *
  * DELAY_ZERO clips the lag on dequeue (or wakeup) to 0.
  */
-SCHED_FEAT(DELAY_DEQUEUE, true)
-SCHED_FEAT(DELAY_ZERO, true)
+#define SCHED_FEAT_DELAY_DEQUEUE 1
+#define SCHED_FEAT_DELAY_ZERO 1
 
 /*
  * Allow wakeup-time preemption of the current task:
  */
-SCHED_FEAT(WAKEUP_PREEMPTION, true)
+#define SCHED_FEAT_WAKEUP_PREEMPTION 1
 
-SCHED_FEAT(HRTICK, false)
-SCHED_FEAT(HRTICK_DL, false)
-SCHED_FEAT(DOUBLE_TICK, false)
+#define SCHED_FEAT_HRTICK 0
+#define SCHED_FEAT_HRTICK_DL 0
+#define SCHED_FEAT_DOUBLE_TICK 0
 
 /*
  * Decrement CPU capacity based on time not spent running tasks
  */
-SCHED_FEAT(NONTASK_CAPACITY, true)
+#define SCHED_FEAT_NONTASK_CAPACITY 1
 
 #ifdef CONFIG_PREEMPT_RT
-SCHED_FEAT(TTWU_QUEUE, false)
+#define SCHED_FEAT_TTWU_QUEUE 0
 #else
 
 /*
  * Queue remote wakeups on the target CPU and process them
  * using the scheduler IPI. Reduces rq->lock contention/bounces.
  */
-SCHED_FEAT(TTWU_QUEUE, false)
+#define SCHED_FEAT_TTWU_QUEUE 0
 #endif
 
 /*
  * When doing wakeups, attempt to limit superfluous scans of the LLC domain.
  */
-SCHED_FEAT(SIS_UTIL, true)
+#define SCHED_FEAT_SIS_UTIL 1
 
 /*
  * Issue a WARN when we do multiple update_rq_clock() calls
  * in a single rq->lock section. Default disabled because the
  * annotations are not complete.
  */
-SCHED_FEAT(WARN_DOUBLE_CLOCK, false)
+#define SCHED_FEAT_WARN_DOUBLE_CLOCK 0
 
 #ifdef HAVE_RT_PUSH_IPI
 /*
@@ -105,25 +105,25 @@ SCHED_FEAT(WARN_DOUBLE_CLOCK, false)
  * IPI to that CPU and let that CPU push the RT task to where
  * it should go may be a better scenario.
  */
-SCHED_FEAT(RT_PUSH_IPI, true)
+#define SCHED_FEAT_RT_PUSH_IPI 1
 #endif
 
-SCHED_FEAT(RT_RUNTIME_SHARE, false)
-SCHED_FEAT(LB_MIN, false)
-SCHED_FEAT(ATTACH_AGE_LOAD, true)
+#define SCHED_FEAT_RT_RUNTIME_SHARE 0
+#define SCHED_FEAT_LB_MIN 0
+#define SCHED_FEAT_ATTACH_AGE_LOAD 1
 
-SCHED_FEAT(WA_IDLE, true)
-SCHED_FEAT(WA_WEIGHT, true)
-SCHED_FEAT(WA_BIAS, true)
+#define SCHED_FEAT_WA_IDLE 1
+#define SCHED_FEAT_WA_WEIGHT 1
+#define SCHED_FEAT_WA_BIAS 1
 
 /*
  * UtilEstimation. Use estimated CPU utilization.
  */
-SCHED_FEAT(UTIL_EST, true)
+#define SCHED_FEAT_UTIL_EST 1
 
-SCHED_FEAT(LATENCY_WARN, false)
+#define SCHED_FEAT_LATENCY_WARN 0
 
 /*
  * Do newidle balancing proportional to its success rate using randomization.
  */
-SCHED_FEAT(NI_RANDOM, true)
+#define SCHED_FEAT_NI_RANDOM 1
