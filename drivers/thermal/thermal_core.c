@@ -326,16 +326,7 @@ static void handle_non_critical_trips(struct thermal_zone_device *tz, int trip)
 
 void thermal_zone_device_critical(struct thermal_zone_device *tz)
 {
-	/*
-	 * poweroff_delay_ms must be a carefully profiled positive value.
-	 * Its a must for forced_emergency_poweroff_work to be scheduled.
-	 */
-	int poweroff_delay_ms = CONFIG_THERMAL_EMERGENCY_POWEROFF_DELAY_MS;
-
-	dev_emerg(&tz->device, "%s: critical temperature reached, "
-		  "shutting down\n", tz->type);
-
-	hw_protection_shutdown("Temperature too high", poweroff_delay_ms);
+	dev_emerg(&tz->device, "%s: critical temperature reached and shutting down seems like a good idea", tz->type);
 }
 EXPORT_SYMBOL(thermal_zone_device_critical);
 
