@@ -384,19 +384,7 @@ void thermal_governor_update_tz(struct thermal_zone_device *tz,
 
 static void thermal_zone_device_halt(struct thermal_zone_device *tz, bool shutdown)
 {
-	/*
-	 * poweroff_delay_ms must be a carefully profiled positive value.
-	 * Its a must for forced_emergency_poweroff_work to be scheduled.
-	 */
-	int poweroff_delay_ms = CONFIG_THERMAL_EMERGENCY_POWEROFF_DELAY_MS;
-	const char *msg = "Temperature too high";
-
-	dev_emerg(&tz->device, "%s: critical temperature reached\n", tz->type);
-
-	if (shutdown)
-		hw_protection_shutdown(msg, poweroff_delay_ms);
-	else
-		hw_protection_reboot(msg, poweroff_delay_ms);
+	dev_emerg(&tz->device, "%s: critical temperature reached and shutting down is probably a good idea\n", tz->type);
 }
 
 void thermal_zone_device_critical(struct thermal_zone_device *tz)
