@@ -199,7 +199,7 @@ config SYMBOLIC_ERRNAME
 
 config DEBUG_BUGVERBOSE
 	bool "Verbose BUG() reporting (adds 70K)" if DEBUG_KERNEL && EXPERT
-	depends on BUG && (GENERIC_BUG || HAVE_DEBUG_BUGVERBOSE)
+	depends on BUG && (GENERIC_BUG || HAVE_DEBUG_BUGVERBOSE) && DEBUG_KERNEL
 	default y
 	help
 	  Say Y here to make BUG() panics output the file name and line number
