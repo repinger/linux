@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+function install_kernel()
+{
+        kernel_image=obj/arch/x86/boot/bzImage
+
+        if [ ! -f ${kernel_image} ]
+        then
+                echo "[+] Kernel image not found; please check for build errors."
+                echo "[+] Exiting . . ."
+
+                exit 1
+        fi
+
+        sudo -v
+        if [ $? != 0 ]
+        then
+                echo "[+] Need privilege escalation in order to install the kernel."
+                echo "[+] Kernel image can be found at ${kernel_image}"
+
+                exit 126
+        fi
+
+        sudo mv ${kernel_image} /boot/vmlinuz-linux-rv
+        sudo make modules_install
+        sudo mkinitcpio -p linux-rv
+        sudo grub-mkconfig -o /boot/grub/grub.cfg
+}
+
+function make_kernel()
+{
+        # Always build clean.
+        rm -fr obj/
+
+        make sf314-54g_defconfig -j$(nproc --all)
+        time make -j$(nproc --all)
+}
+
+clear
+
+make_kernel
+install_kernel
+
+reboot
