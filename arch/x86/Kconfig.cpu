@@ -3,7 +3,6 @@
 choice
 	prompt "Processor family"
 	default M686 if X86_32
-	default GENERIC_CPU if X86_64
 	help
 	  This is the processor type of your CPU. This information is
 	  used for optimizing purposes. In order to compile a kernel
@@ -286,13 +285,6 @@ config MATOM
 	  in-order pipelining architecture and thus can benefit from
 	  accordingly optimized code. Use a recent GCC with specific Atom
 	  support in order to fully benefit from selecting this option.
-
-config GENERIC_CPU
-	bool "Generic-x86-64"
-	depends on X86_64
-	help
-	  Generic x86-64 CPU.
-	  Run equally well on all x86-64 CPUs.
 
 endchoice
 
