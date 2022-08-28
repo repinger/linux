@@ -1158,7 +1158,7 @@ static struct ctl_table ipv6_icmp_table_template[] = {
 		.procname	= "echo_ignore_all",
 		.data		= &init_net.ipv6.sysctl.icmpv6_echo_ignore_all,
 		.maxlen		= sizeof(u8),
-		.mode		= 0644,
+		.mode		= 0444,
 		.proc_handler = proc_dou8vec_minmax,
 	},
 	{

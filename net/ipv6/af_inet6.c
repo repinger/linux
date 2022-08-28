@@ -950,7 +950,7 @@ static int __net_init inet6_net_init(struct net *net)
 
 	net->ipv6.sysctl.bindv6only = 0;
 	net->ipv6.sysctl.icmpv6_time = 1*HZ;
-	net->ipv6.sysctl.icmpv6_echo_ignore_all = 0;
+	net->ipv6.sysctl.icmpv6_echo_ignore_all = 1;
 	net->ipv6.sysctl.icmpv6_echo_ignore_multicast = 0;
 	net->ipv6.sysctl.icmpv6_echo_ignore_anycast = 0;
 

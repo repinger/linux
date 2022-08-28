@@ -1443,7 +1443,7 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES + 1] = {
 static int __net_init icmp_sk_init(struct net *net)
 {
 	/* Control parameters for ECHO replies. */
-	net->ipv4.sysctl_icmp_echo_ignore_all = 0;
+	net->ipv4.sysctl_icmp_echo_ignore_all = 1;
 	net->ipv4.sysctl_icmp_echo_enable_probe = 0;
 	net->ipv4.sysctl_icmp_echo_ignore_broadcasts = 1;
 
