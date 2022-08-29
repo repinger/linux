@@ -352,7 +352,7 @@ static int __power_supply_is_system_supplied(struct device *dev, void *data)
 			return 0;
 
 	(*count)++;
-	if (psy->desc->type != POWER_SUPPLY_TYPE_BATTERY)
+	if (psy->desc->type != POWER_SUPPLY_TYPE_BATTERY && !WARN_ON(!psy->desc->get_property))
 		if (!psy->desc->get_property(psy, POWER_SUPPLY_PROP_ONLINE,
 					&ret))
 			return ret.intval;
