@@ -10191,6 +10191,7 @@ void __might_resched(const char *file, int line, unsigned int offsets)
 	print_preempt_disable_ip(offsets & MIGHT_RESCHED_PREEMPT_MASK,
 				 preempt_disable_ip);
 
+	panic("%s: Panicking due to potential bug", __func__);
 	dump_stack();
 	add_taint(TAINT_WARN, LOCKDEP_STILL_OK);
 }
@@ -10219,6 +10220,7 @@ void __cant_sleep(const char *file, int line, int preempt_offset)
 			current->pid, current->comm);
 
 	debug_show_held_locks(current);
+	panic("%s: Panicking due to potential bug", __func__);
 	dump_stack();
 	add_taint(TAINT_WARN, LOCKDEP_STILL_OK);
 }
