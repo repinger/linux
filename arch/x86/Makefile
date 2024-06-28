@@ -178,7 +178,9 @@ ifdef CONFIG_X86_NATIVE_CPU
         KBUILD_RUSTFLAGS += -Ctarget-cpu=native
 else ifdef CONFIG_MARCH
 	KBUILD_CFLAGS += -march=$(CONFIG_MTUNE_FOR)
+ifndef CONFIG_MARCH_ONLY
 	KBUILD_CFLAGS += -mtune=$(CONFIG_MTUNE_FOR)
+endif
 else
         KBUILD_CFLAGS += -march=x86-64 -mtune=generic
         KBUILD_RUSTFLAGS += -Ctarget-cpu=x86-64 -Ztune-cpu=generic
