@@ -3,7 +3,7 @@
 # Contributor: Jan Alexander Steffens (heftig) <heftig@archlinux.org>
 
 pkgbase=${PACMAN_PKGBASE:-linux-upstream}
-pkgname=("${pkgbase}" "${pkgbase}-api-headers")
+pkgname=("${pkgbase}")
 if grep -q CONFIG_MODULES=y include/config/auto.conf; then
 	pkgname+=("${pkgbase}-headers")
 fi
