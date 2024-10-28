@@ -136,5 +136,5 @@ void i915_restore_display(struct drm_i915_private *dev_priv)
 
 	intel_vga_redisable(dev_priv);
 
-	intel_gmbus_reset(dev_priv);
+	intel_gmbus_reset(display);
 }
