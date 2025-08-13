@@ -1881,7 +1881,7 @@ config PC104
 	  machine has a PC/104 bus.
 
 config KALLSYMS
-	bool "Load all symbols for debugging/ksymoops" if EXPERT
+	bool "Load all symbols for debugging/ksymoops"
 	default y
 	help
 	  Say Y here to let the kernel print out symbolic crash information and
