@@ -2552,7 +2552,6 @@ config SENSORS_YOGAFAN
 	  This driver can also be built as a module. If so, the module
 	  will be called yogafan.
 
-
 config SENSORS_INTEL_M10_BMC_HWMON
 	tristate "Intel MAX10 BMC Hardware Monitoring"
 	depends on MFD_INTEL_M10_BMC_CORE
