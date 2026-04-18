@@ -1,0 +1,57 @@
+name: Linux Kernel Build
+on:
+  push:
+    branches:
+      - test
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm git bc cpio pahole python rsync wget aws-cli-v2
+
+      - name: Create build user
+        run: |
+          useradd -m -s /bin/bash ci
+
+      - name: Chown code to build user
+        run: |
+          chown -R ci:ci .
+
+      - name: Fetch Archlinux kernel defconfig
+        run: |
+          sudo -u ci mkdir out
+          sudo -u ci wget \
+            https://gitlab.archlinux.org/archlinux/packaging/packages/linux/-/raw/main/config.x86_64?ref_type=heads \
+            -O out/.config
+
+      - name: Make defconfig
+        run: |
+          sudo -u ci make O=out olddefconfig -j$(nproc)
+
+      - name: Build kernel
+        run: |
+          sudo -u ci make O=out \
+            KBUILD_BUILD_HOST="github.com" pacman-pkg \
+            PACMAN_EXTRAPACKAGES="headers" -j$(nproc)
+
+      - name: Setup AWS CLI
+        run: |
+          sudo -u ci aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY }}
+          sudo -u ci aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_KEY }}
+          sudo -u ci aws configure set default.region auto
+          sudo -u ci aws configure set default.output json
+
+      - name: Upload kernel package to S3 bucket
+        run: |
+          sudo -u ci find out/ -maxdepth 1 \
+            -type f -name "*.pkg.tar.zst" \
+            -exec aws s3 cp {} s3://${{ secrets.S3_BUCKET }} \
+            --endpoint-url ${{ secrets.S3_ENDPOINT }} \;
