@@ -22,7 +22,7 @@ struct drm_printer;
  * mode: debugfs file permissions, one of {0400, 0600, 0}, use 0 to not create
  *       debugfs file
  */
-#define INTEL_DISPLAY_PARAMS_FOR_EACH(param) \
+#define INTEL_DISPLAY_PARAMS_FOR_EACH_ORIG(param) \
 	param(char *, dmc_firmware_path, NULL, 0400) \
 	param(char *, vbt_firmware, NULL, 0400) \
 	param(int, lvds_channel_mode, 0, 0400) \
@@ -50,6 +50,15 @@ struct drm_printer;
 	param(bool, psr_safest_params, false, 0400) \
 	param(bool, enable_psr2_sel_fetch, true, 0400) \
 	param(int, enable_dmc_wl, -1, 0400) \
+
+#ifdef I915
+#define INTEL_DISPLAY_PARAMS_FOR_EACH(param) \
+	INTEL_DISPLAY_PARAMS_FOR_EACH_ORIG(param) \
+	param(bool, enable_hd_vgaarb, false, 0400)
+#else /* I915 */
+#define INTEL_DISPLAY_PARAMS_FOR_EACH(param) \
+	INTEL_DISPLAY_PARAMS_FOR_EACH_ORIG(param)
+#endif /* I915 */
 
 #define MEMBER(T, member, ...) T member;
 struct intel_display_params {

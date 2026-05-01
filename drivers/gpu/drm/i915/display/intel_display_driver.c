@@ -33,6 +33,9 @@
 #include "intel_display_debugfs.h"
 #include "intel_display_driver.h"
 #include "intel_display_irq.h"
+#ifdef I915
+#include "intel_display_params.h"
+#endif /* I915 */
 #include "intel_display_power.h"
 #include "intel_display_types.h"
 #include "intel_display_utils.h"
@@ -208,9 +211,15 @@ int intel_display_driver_probe_noirq(struct intel_display *display)
 
 	intel_bios_init(display);
 
+#ifdef I915
+	if (!display->params.enable_hd_vgaarb || !HAS_PCH_SPLIT(display)) {
+#endif /* I915 */
 	ret = intel_vga_register(display);
 	if (ret)
 		goto cleanup_bios;
+#ifdef I915
+	}
+#endif /* I915 */
 
 	intel_psr_dc5_dc6_wa_init(display);
 
@@ -538,6 +547,14 @@ int intel_display_driver_probe(struct intel_display *display)
 
 	intel_overlay_setup(display);
 
+#ifdef I915
+	/*
+	 * Must do this after fbcon init so that
+	 * vgacon_save_screen() works during the handover.
+	 */
+	intel_vga_disable_mem(display);
+#endif /* I915 */
+
 	/* Only enable hotplug handling once the fbdev is fully set up. */
 	intel_hpd_init(display);
 
@@ -588,6 +605,10 @@ void intel_display_driver_remove(struct intel_display *display)
 	if (!HAS_DISPLAY(display))
 		return;
 
+#ifdef I915
+	intel_vga_enable_mem(display);
+#endif /* I915 */
+
 	flush_workqueue(display->wq.flip);
 	flush_workqueue(display->wq.modeset);
 	flush_workqueue(display->wq.cleanup);
@@ -618,6 +639,9 @@ void intel_display_driver_remove_noirq(struct intel_display *display)
 	intel_unregister_dsm_handler();
 
 	/* flush any delayed tasks or pending work */
+#ifdef I915
+	intel_vga_enable_mem(display);
+#endif /* I915 */
 	flush_workqueue(display->wq.unordered);
 
 	intel_hdcp_component_fini(display);

@@ -13,6 +13,10 @@ struct drm_modeset_acquire_ctx;
 struct intel_display;
 struct pci_dev;
 
+#ifdef I915
+extern void intel_vga_disable_mem(struct intel_display *display);
+#endif /* I915 */
+
 bool intel_display_driver_probe_defer(struct pci_dev *pdev);
 void intel_display_driver_init_hw(struct intel_display *display);
 void intel_display_driver_early_probe(struct intel_display *display);

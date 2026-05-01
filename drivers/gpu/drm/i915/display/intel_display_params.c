@@ -102,6 +102,11 @@ intel_display_param_named_unsafe(force_reset_modeset_test, bool, 0400,
 intel_display_param_named(disable_display, bool, 0400,
 	"Disable display (default: false)");
 
+#ifdef I915
+intel_display_param_named(enable_hd_vgaarb, bool, 0400,
+	"Enable support for VGA arbitration on Intel HD IGD. (default: false)");
+#endif /* I915 */
+
 intel_display_param_named(verbose_state_checks, bool, 0400,
 	"Enable verbose logs (ie. WARN_ON()) in case of unexpected hw state conditions.");
 

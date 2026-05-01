@@ -12,6 +12,11 @@
 #include <drm/intel/i915_drm.h>
 #include <video/vga.h>
 
+#ifdef I915
+#include "i915_drv.h"
+#include "intel_display_params.h"
+#endif /* I915 */
+
 #include "intel_de.h"
 #include "intel_display.h"
 #include "intel_display_types.h"
@@ -75,6 +80,37 @@ void intel_vga_disable(struct intel_display *display)
 	intel_de_write(display, vga_reg, VGA_DISP_DISABLE);
 	intel_de_posting_read(display, vga_reg);
 }
+
+#ifdef I915
+void intel_vga_enable_mem(struct intel_display *display)
+{
+	struct pci_dev *pdev = to_pci_dev(display->drm->dev);
+	/* Enable VGA memory on Intel HD */
+	if (display->params.enable_hd_vgaarb && HAS_PCH_SPLIT(display)) {
+		vga_get_uninterruptible(pdev, VGA_RSRC_LEGACY_IO);
+		outb(inb(VGA_MIS_R) | (1 << 1), VGA_MIS_W);
+		vga_set_legacy_decoding(pdev, VGA_RSRC_LEGACY_IO |
+						VGA_RSRC_LEGACY_MEM |
+						VGA_RSRC_NORMAL_IO |
+						VGA_RSRC_NORMAL_MEM);
+		vga_put(pdev, VGA_RSRC_LEGACY_IO);
+	}
+}
+
+void intel_vga_disable_mem(struct intel_display *display)
+{
+	struct pci_dev *pdev = to_pci_dev(display->drm->dev);
+	/* Disable VGA memory on Intel HD */
+	if (display->params.enable_hd_vgaarb && HAS_PCH_SPLIT(display)) {
+		vga_get_uninterruptible(pdev, VGA_RSRC_LEGACY_IO);
+		outb(inb(VGA_MIS_R) & ~(1 << 1), VGA_MIS_W);
+		vga_set_legacy_decoding(pdev, VGA_RSRC_LEGACY_IO |
+						   VGA_RSRC_NORMAL_IO |
+						   VGA_RSRC_NORMAL_MEM);
+		vga_put(pdev, VGA_RSRC_LEGACY_IO);
+	}
+}
+#endif /* I915 */
 
 void intel_vga_reset_io_mem(struct intel_display *display)
 {
