@@ -1,0 +1,233 @@
+name: CI
+on:
+  push:
+    branches: [main, test]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.distro }} kernel package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: archlinux
+            container_tag: base-devel
+            package_format: pkg.tar.zst
+          - distro: debian
+            container_tag: latest
+            package_format: deb
+    container:
+      image: ${{ matrix.distro }}:${{ matrix.container_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        run: |
+          pacman -Syu --noconfirm git bc \
+            cpio pahole python rsync \
+            aws-cli-v2 wget ccache
+
+      - name: Install dependencies (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt update
+          apt full-upgrade -y
+          apt install -y \
+            build-essential libncurses-dev bison flex \
+            libssl-dev libelf-dev bc fakeroot \
+            awscli ccache sudo cpio kmod rsync \
+            debhelper zstd lz4 wget libdw-dev \
+            gpg
+
+      - name: Create build user
+        run: |
+          useradd -m -s /bin/bash ci
+
+      - name: Import GPG key
+        env:
+          GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo -n "$GPG_KEY" | base64 -d | sudo -u ci gpg --batch --import
+
+          sudo -u ci mkdir -p ~ci/.gnupg
+          sudo -u ci bash -c 'chmod 700 ~/.gnupg'
+
+          sudo -u ci bash -c 'echo allow-loopback-pinentry >> ~/.gnupg/gpg-agent.conf'
+          sudo -u ci bash -c 'echo allow-preset-passphrase >> ~/.gnupg/gpg-agent.conf'
+          sudo -u ci bash -c 'echo default-cache-ttl 21600 >> ~/.gnupg/gpg-agent.conf'
+          sudo -u ci bash -c 'echo max-cache-ttl 21600 >> ~/.gnupg/gpg-agent.conf'
+
+          sudo -u ci gpg-connect-agent --quiet "RELOADAGENT" /bye || true
+
+          KEYGRIP=$(sudo -u ci gpg --with-keygrip --list-secret-keys --keyid-format LONG \
+            2>/dev/null | grep -m1 "Keygrip" | awk '{print $3}')
+
+          echo -n "$GPG_PASSPHRASE" | base64 -d | \
+            sudo -u ci /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
+
+      - name: Chown code to build user
+        run: |
+          chown -R ci:ci .
+
+      - name: Setup Cache for ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/ci/.cache/ccache
+          key: ccache-${{ github.ref_name }}-${{ matrix.distro }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ matrix.distro }}-
+            ccache-${{ github.ref_name }}-
+
+      - name: Clear ccache stats
+        run: |
+          sudo -u ci ccache -z
+
+      - name: Make defconfig
+        run: |
+          sudo -u ci make CC="ccache gcc" O=out \
+            default_defconfig -j$(nproc)
+
+      - name: Build kernel (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        env:
+          PACKAGER: "repinger <release@repinger.com>"
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" pacman-pkg \
+            PACMAN_EXTRAPACKAGES="headers" \
+            PACMAN_PKGBASE="linux-custom-${{ github.ref_name }}" \
+            MAKEPKGOPTS="--sign" -j$(nproc)
+
+      - name: Build kernel (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" \
+            KDEB_SOURCENAME=linux-custom-${{ github.ref_name }} \
+            bindeb-pkg -j$(nproc)
+
+      - name: Upload kernel package as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-${{ github.ref_name }}-${{ matrix.distro }}
+          path: "**/*.${{ matrix.package_format }}"
+
+      - name: Upload kernel package signatures as artifact
+        if: ${{ matrix.distro == 'archlinux' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-sig-${{ github.ref_name }}
+          path: "**/*.sig"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create GitHub release kernel package
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download kernel package artifact
+        uses: actions/download-artifact@v8
+
+      - name: Release versioning
+        id: release_ver
+        run: |
+          echo "RELEASE_NAME=$(date +%Y%m%d%H%M%S)-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Delete sig files
+        run: |
+          find . -type f -name "*.sig" -delete
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release_ver.outputs.RELEASE_NAME }}
+          files: "**/*"
+
+  arch-repo-release:
+    name: Create Arch Linux repository release
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    env:
+      REPO_DIR: "archlinux/linux-custom-${{ github.ref_name }}/os/x86_64"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+      AWS_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT }}
+      AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      AWS_DEFAULT_REGION: auto
+
+    steps:
+      - name: Download kernel package artifact
+        uses: actions/download-artifact@v8
+
+      - name: Remove Debian packages
+        run: |
+          find . -type f -name "*.deb" -delete
+
+      - name: Install aws-cli & update
+        run: |
+          pacman -Syu --noconfirm aws-cli-v2 tree
+
+      - name: Import GPG key
+        env:
+          GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo -n "$GPG_KEY" | base64 -d | gpg --batch --import
+
+          mkdir -p ~ci/.gnupg
+          bash -c 'chmod 700 ~/.gnupg'
+
+          bash -c 'echo allow-loopback-pinentry >> ~/.gnupg/gpg-agent.conf'
+          bash -c 'echo allow-preset-passphrase >> ~/.gnupg/gpg-agent.conf'
+
+          gpg-connect-agent --quiet "RELOADAGENT" /bye || true
+
+          KEYGRIP=$(gpg --with-keygrip --list-secret-keys --keyid-format LONG \
+            2>/dev/null | grep -m1 "Keygrip" | awk '{print $3}')
+
+          echo -n "$GPG_PASSPHRASE" | base64 -d | \
+            /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
+
+      - name: Create repository structure
+        run: |
+          mkdir -p $REPO_DIR
+
+          tree
+
+          find . -type f -name "*.pkg.tar.zst" -exec mv -v {} $REPO_DIR/ \;
+          find . -type f -name "*.sig" -exec mv -v {} $REPO_DIR/ \;
+
+          repo-add -n -R -s -v \
+            $REPO_DIR/linux-custom-${{ github.ref_name }}.db.tar.gz \
+            $REPO_DIR/*.pkg.tar.zst
+
+          tree
+
+      - name: Upload repository to S3 bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT }}
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 rm --recursive \
+            "s3://$AWS_S3_BUCKET/$REPO/" || true
+
+          aws s3 cp archlinux \
+            "s3://$AWS_S3_BUCKET/archlinux" \
+            --recursive
