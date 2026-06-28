@@ -1,0 +1,214 @@
+name: CI
+on:
+  workflow_dispatch:
+  push:
+    branches: [stable, lts]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.distro }} kernel package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: archlinux
+            container_tag: base-devel
+            package_format: pkg.tar.zst
+          - distro: debian
+            container_tag: latest
+            package_format: deb
+    container:
+      image: ${{ matrix.distro }}:${{ matrix.container_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install dependencies (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git bc cpio pahole python rsync \
+            aws-cli-v2 wget ccache
+
+      - name: Install dependencies (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt update
+          apt full-upgrade -y
+          apt install -y \
+            build-essential libncurses-dev bison flex \
+            libssl-dev libelf-dev bc fakeroot \
+            awscli ccache sudo cpio kmod rsync \
+            debhelper zstd lz4 wget libdw-dev \
+            gpg git
+
+      - name: Create build user
+        run: |
+          useradd -m -s /bin/bash ci
+
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          build-user: ci
+
+      - name: Setup Cache for ccache
+        uses: actions/cache@v6
+        with:
+          path: /home/ci/.cache/ccache
+          key: ccache-${{ github.ref_name }}-${{ matrix.distro }}-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ matrix.distro }}-
+            ccache-${{ github.ref_name }}-
+
+      - name: Fix ownership for build user
+        run: |
+          chown -R ci:ci . /home/ci
+
+      - name: Clear ccache stats
+        run: |
+          sudo -u ci ccache -z
+
+      - name: Make defconfig
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out default_defconfig -j$(nproc)
+
+      - name: Build kernel (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        env:
+          PACKAGER: "repinger <release@repinger.com>"
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" pacman-pkg \
+            PACMAN_EXTRAPACKAGES="headers" \
+            PACMAN_PKGBASE="linux-custom-${{ github.ref_name }}" \
+            INSTALL_MOD_STRIP=1 \
+            MAKEPKGOPTS="--sign" -j$(nproc)
+
+      - name: Build kernel (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" \
+            KDEB_SOURCENAME=linux-custom-${{ github.ref_name }} \
+            INSTALL_MOD_STRIP=1 \
+            bindeb-pkg -j$(nproc)
+
+      - name: Upload kernel package as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-${{ github.ref_name }}-${{ matrix.distro }}
+          path: "**/*.${{ matrix.package_format }}"
+          retention-days: 1
+
+      - name: Upload kernel package signatures as artifact
+        if: ${{ matrix.distro == 'archlinux' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-sig-${{ github.ref_name }}
+          path: "**/*.sig"
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create GitHub release kernel package
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download kernel package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-custom-${{ github.ref_name }}-*
+          merge-multiple: true
+
+      - name: Release versioning
+        id: release_ver
+        run: |
+          echo "RELEASE_NAME=$(date +%Y%m%d%H%M%S)-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release_ver.outputs.RELEASE_NAME }}
+          files: "**/*"
+
+  arch-repo-release:
+    name: Create Arch Linux repository release
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    env:
+      REPO_DIR: "archlinux/linux-custom-${{ github.ref_name }}/os/x86_64"
+
+    steps:
+      - name: Install aws-cli & update
+        run: |
+          pacman -Syu --noconfirm aws-cli-v2 git
+
+      - name: Checkout composite action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            .github
+
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Download Arch Linux package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-custom-${{ github.ref_name }}-archlinux
+          merge-multiple: true
+
+      - name: Download signature artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-custom-sig-${{ github.ref_name }}
+          merge-multiple: true
+
+      - name: Create repository structure
+        run: |
+          mkdir -p $REPO_DIR
+
+          find . -type f -name "*.pkg.tar.zst" -exec mv -v {} $REPO_DIR/ \;
+          find . -type f -name "*.sig" -exec mv -v {} $REPO_DIR/ \;
+
+          repo-add -n -R -s -v \
+            $REPO_DIR/linux-custom-${{ github.ref_name }}.db.tar.gz \
+            $REPO_DIR/*.pkg.tar.zst
+
+          ls -lash $REPO_DIR
+
+      - name: Upload repository to S3 bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT }}
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 rm --recursive \
+            "s3://$AWS_S3_BUCKET/$REPO_DIR/"
+
+          aws s3 cp archlinux \
+            "s3://$AWS_S3_BUCKET/archlinux" \
+            --recursive
