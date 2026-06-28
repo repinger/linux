@@ -1,0 +1,49 @@
+name: Setup GPG
+description: Import GPG key and preset passphrase
+inputs:
+  gpg-key:
+    description: Base64-encoded GPG private key
+    required: true
+  gpg-passphrase:
+    description: Base64-encoded passphrase for the GPG key
+    required: true
+  build-user:
+    description: User to run GPG commands as (empty = root)
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Import GPG key
+      env:
+        GPG_KEY: ${{ inputs.gpg-key }}
+        GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
+        BUILD_USER: ${{ inputs.build-user }}
+      shell: bash
+      run: |
+        _as() {
+          if [ -n "$BUILD_USER" ]; then
+            sudo -u "$BUILD_USER" "$@"
+          else
+            "$@"
+          fi
+        }
+
+        echo -n "$GPG_KEY" | base64 -d | _as gpg --batch --import
+
+        GNUPGHOME=$(_as gpgconf --list-dirs homedir 2>/dev/null || echo ~/.gnupg)
+        _as mkdir -p "$GNUPGHOME"
+        _as chmod -R 700 "$GNUPGHOME"
+
+        _as echo allow-loopback-pinentry >> $GNUPGHOME/gpg-agent.conf
+        _as echo allow-preset-passphrase >> $GNUPGHOME/gpg-agent.conf
+        _as echo default-cache-ttl 21600 >> $GNUPGHOME/gpg-agent.conf
+        _as echo max-cache-ttl 21600 >> $GNUPGHOME/gpg-agent.conf
+
+        _as gpg-connect-agent --quiet "RELOADAGENT" /bye
+
+        KEYGRIP=$(_as gpg --with-keygrip --list-secret-keys --keyid-format LONG \
+          2>/dev/null | grep -m1 "Keygrip" | awk '{print $3}')
+
+        echo -n "$GPG_PASSPHRASE" | base64 -d | \
+          _as /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
