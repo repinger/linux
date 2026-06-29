@@ -146,6 +146,10 @@ jobs:
         with:
           tag_name: ${{ steps.release_ver.outputs.RELEASE_NAME }}
           files: "**/*"
+          body: |
+            ```
+            ${{ github.event.head_commit.message }}
+            ```
 
   arch-repo-release:
     name: Create Arch Linux repository release
