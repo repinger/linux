@@ -147,9 +147,31 @@ jobs:
           tag_name: ${{ steps.release_ver.outputs.RELEASE_NAME }}
           files: "**/*"
           body: |
+            Changelog:
             ```
             ${{ github.event.head_commit.message }}
             ```
+
+            How to install (Arch Linux)
+
+              1. Import the key ID:
+              ```
+              $ sudo pacman-key --recv-keys 6E8CA7C489F102D2
+              $ sudo pacman-key --lsign-key 6E8CA7C489F102D2
+              ```
+
+              2. Append the following repo to `/etc/pacman.conf`:
+              ```
+              [linux-custom-${{ github.ref_name }}]
+              Server = https://repo.repinger.com/archlinux/$repo/os/$arch
+              ```
+
+              3. Fetch & install the kernel:
+              ```
+              $ sudo pacman -Sy \
+                  linux-custom-${{ github.ref_name }} \
+                  linux-custom-${{ github.ref_name }}-headers
+              ```
 
   arch-repo-release:
     name: Create Arch Linux repository release
