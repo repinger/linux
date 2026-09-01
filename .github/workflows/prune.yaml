@@ -1,0 +1,21 @@
+name: Prune old tags and releases
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 1,15 * *"
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prune old tags and releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 1000 | tail -n +2 | awk '{print $1}' | xargs -I {} gh release delete {} --cleanup-tag -y
