@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  workflow_call:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Create GitHub release kernel package
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download kernel package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-custom-package-${{ github.ref_name }}-*
+          merge-multiple: true
+
+      - name: Release versioning
+        id: release_ver
+        run: |
+          echo "RELEASE_NAME=$(date +%Y%m%d%H%M%S)-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release_ver.outputs.RELEASE_NAME }}
+          files: "**/*"
+          body: |
+            Changelog:
+            ```
+            ${{ github.event.head_commit.message }}
+            ```
+
+            How to install (Arch Linux)
+
+              1. Import the key ID:
+              ```
+              $ sudo pacman-key --recv-keys 6E8CA7C489F102D2
+              $ sudo pacman-key --lsign-key 6E8CA7C489F102D2
+              ```
+
+              2. Append the following repo to `/etc/pacman.conf`:
+              ```
+              [linux-custom-${{ github.ref_name }}]
+              Server = https://repo.repinger.com/archlinux/$repo/os/$arch
+              ```
+
+              3. Fetch & install the kernel:
+              ```
+              $ sudo pacman -Sy \
+                  linux-custom-${{ github.ref_name }} \
+                  linux-custom-${{ github.ref_name }}-headers
+              ```
+
+  arch-repo-release:
+    name: Create Arch Linux repository release
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    env:
+      REPO_DIR: "archlinux/linux-custom-${{ github.ref_name }}/os/x86_64"
+
+    steps:
+      - name: Install aws-cli & update
+        run: |
+          pacman -Syu --noconfirm aws-cli-v2 git
+
+      - name: Checkout composite action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            .github
+
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Download Arch Linux package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-custom-package-${{ github.ref_name }}-archlinux
+
+      - name: Download signature artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-custom-sig-${{ github.ref_name }}
+
+      - name: Create repository structure
+        run: |
+          mkdir -p $REPO_DIR
+
+          find . -type f -name "*.pkg.tar.zst" -exec mv -v {} $REPO_DIR/ \;
+          find . -type f -name "*.sig" -exec mv -v {} $REPO_DIR/ \;
+
+          repo-add -n -R -s -v \
+            $REPO_DIR/linux-custom-${{ github.ref_name }}.db.tar.gz \
+            $REPO_DIR/*.pkg.tar.zst
+
+          ls -lash $REPO_DIR
+
+      - name: Upload repository to S3 bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT }}
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 rm --recursive \
+            "s3://$AWS_S3_BUCKET/$REPO_DIR/"
+
+          aws s3 cp archlinux \
+            "s3://$AWS_S3_BUCKET/archlinux" \
+            --recursive
