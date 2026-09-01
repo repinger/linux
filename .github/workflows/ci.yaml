@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [stable, lts]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yaml
+    secrets: inherit
+
+  test:
+    needs: build
+    uses: ./.github/workflows/test.yaml
+
+  release:
+    needs: [build, test]
+    uses: ./.github/workflows/release.yaml
+    secrets: inherit
