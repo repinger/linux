@@ -116,6 +116,7 @@ modules.order
 !.mailmap
 !.pylintrc
 !.rustfmt.toml
+!.nvchecker.toml
 !.github/
 
 #
@@ -184,3 +185,7 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
+
+# nvchecker runtime files
+old_ver.json
+new_ver.json
