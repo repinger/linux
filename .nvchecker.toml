@@ -1,0 +1,11 @@
+[__config__]
+oldver = "old_ver.json"
+newver = "new_ver.json"
+
+[linux-stable]
+source = "cmd"
+cmd = "curl -sf https://kernel.org/releases.json | jq -r '.releases[] | select(.moniker == \"stable\") | .version'"
+
+[linux-lts]
+source = "cmd"
+cmd = "curl -sf https://kernel.org/releases.json | jq -r '[.releases[] | select(.moniker == \"longterm\")] | first | .version'"
