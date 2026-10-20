@@ -121,6 +121,7 @@ modules.order
 !.mailmap
 !.pylintrc
 !.rustfmt.toml
+!.nvchecker.toml
 !.github/
 
 #
@@ -195,3 +196,7 @@ sphinx_*/
 
 # bc language scripts (not LLVM bitcode)
 !kernel/time/timeconst.bc
+
+# nvchecker runtime files
+old_ver.json
+new_ver.json
