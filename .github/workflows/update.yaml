@@ -1,0 +1,87 @@
+name: Auto-merge upstream kernel releases
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-and-merge:
+    name: Check & merge ${{ matrix.branch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - branch: stable
+            nvchecker_entry: linux-stable
+            upstream_branch: linux-7.3.y
+            upstream_repo: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux
+          - branch: lts
+            nvchecker_entry: linux-lts
+            upstream_branch: linux-6.18.y
+            upstream_repo: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.MY_PAT }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Install nvchecker
+        run: pip install nvchecker
+
+      - name: Generate old_ver.json from Makefile
+        run: |
+          VERSION=$(sed -n 's/^VERSION = //p' Makefile)
+          PATCHLEVEL=$(sed -n 's/^PATCHLEVEL = //p' Makefile)
+          SUBLEVEL=$(sed -n 's/^SUBLEVEL = //p' Makefile)
+          CURRENT_VER="${VERSION}.${PATCHLEVEL}.${SUBLEVEL}"
+          echo "Current ${{ matrix.branch }} kernel version: ${CURRENT_VER}"
+          echo "{\"${{ matrix.nvchecker_entry }}\": \"${CURRENT_VER}\"}" > old_ver.json
+
+      - name: Run nvchecker
+        run: nvchecker -c .nvchecker.toml
+
+      - name: Check for updates
+        id: check
+        run: |
+          NVCMP_OUT=$(nvcmp -c .nvchecker.toml || true)
+          echo "$NVCMP_OUT"
+          if echo "$NVCMP_OUT" | grep -q "${{ matrix.nvchecker_entry }}"; then
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+            echo "New ${{ matrix.branch }} kernel version detected. Merging upstream..."
+          else
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            echo "No new ${{ matrix.branch }} kernel version detected. Skipping merge."
+          fi
+
+      - name: Configure git
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git config user.name ${{ github.actor }}
+          git config user.email ${{ github.actor }}@users.noreply.github.com
+
+      - name: Fetch upstream branch
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git fetch ${{ matrix.upstream_repo }} ${{ matrix.upstream_branch }}
+
+      - name: Merge upstream
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git merge FETCH_HEAD --no-edit --log --signoff
+
+      - name: Push to trigger CI
+        if: steps.check.outputs.has_update == 'true'
+        run: |
+          git push origin ${{ matrix.branch }}
