@@ -1,0 +1,148 @@
+name: Build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.distro }} kernel package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: archlinux
+            container_image: archlinux:base-devel
+            package_format: pkg.tar.zst
+          - distro: debian
+            container_image: debian:latest
+            package_format: deb
+          - distro: rhel
+            container_image: rockylinux/rockylinux:10
+            package_format: rpm
+    container:
+      image: ${{ matrix.container_image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install dependencies (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git bc cpio pahole python rsync \
+            aws-cli-v2 wget ccache pahole rust
+
+      - name: Install dependencies (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt update
+          apt install -y \
+            build-essential libncurses-dev bison flex \
+            libssl-dev libelf-dev bc fakeroot \
+            awscli ccache sudo cpio kmod rsync \
+            debhelper zstd lz4 wget libdw-dev \
+            gpg git pahole rustup
+
+      - name: Install dependencies (RHEL)
+        if: ${{ matrix.distro == 'rhel' }}
+        run: |
+          dnf update --refresh -y
+          dnf install epel-release -y
+          dnf groupinstall "Development Tools" -y
+          dnf install ncurses-devel openssl-devel \
+            elfutils-libelf-devel bc bison flex \
+            perl dwarves rpm-build openssl ccache \
+            rsync sudo lz4 zstd dwarves -y
+
+      - name: Create build user
+        run: |
+          useradd -m -s /bin/bash ci
+
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          build-user: ci
+
+      - name: Setup Cache for ccache
+        uses: actions/cache@v6
+        with:
+          path: /home/ci/.cache/ccache
+          key: ccache-${{ github.ref_name }}-${{ matrix.distro }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ matrix.distro }}
+            ccache-${{ github.ref_name }}-
+
+      - name: Fix ownership for build user
+        run: |
+          chown -R ci:ci . /home/ci
+
+      - name: Clear ccache stats
+        run: |
+          sudo -u ci ccache -z
+
+      - name: Make defconfig
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out default_defconfig -j$(nproc)
+
+      - name: Build kernel (Arch Linux)
+        if: ${{ matrix.distro == 'archlinux' }}
+        env:
+          PACKAGER: "repinger <release@repinger.com>"
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" pacman-pkg \
+            PACMAN_EXTRAPACKAGES="headers" \
+            PACMAN_PKGBASE="linux-custom-${{ github.ref_name }}" \
+            INSTALL_MOD_STRIP=1 \
+            MAKEPKGOPTS="--sign" -j$(nproc)
+
+      - name: Build kernel (Debian)
+        if: ${{ matrix.distro == 'debian' }}
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" \
+            INSTALL_MOD_STRIP=1 \
+            bindeb-pkg -j$(nproc)
+
+      - name: Build kernel (RHEL)
+        if: ${{ matrix.distro == 'rhel' }}
+        run: |
+          sudo -u ci make CC="ccache gcc" \
+            O=out KBUILD_BUILD_HOST="github.com" \
+            INSTALL_MOD_STRIP=1 \
+            binrpm-pkg -j$(nproc)
+
+      - name: Upload kernel package as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-package-${{ github.ref_name }}-${{ matrix.distro }}
+          path: "**/*.${{ matrix.package_format }}"
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload kernel package signatures as artifact
+        if: ${{ matrix.distro == 'archlinux' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-sig-${{ github.ref_name }}
+          path: "**/*.sig"
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload bzImage as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-custom-bzimage-${{ github.ref_name }}-${{ matrix.distro }}
+          path: "**/bzImage"
+          retention-days: 1
+          if-no-files-found: error
